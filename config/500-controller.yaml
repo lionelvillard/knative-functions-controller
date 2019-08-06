@@ -30,6 +30,8 @@ spec:
           value: config-observability
         - name: METRICS_DOMAIN
           value: knative.dev/function
+        - name: GVR
+          value: "filters.v1alpha1.function.knative.dev"
         ports:
           - containerPort: 9090
             name: metrics
