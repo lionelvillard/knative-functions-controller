@@ -31,7 +31,7 @@ spec:
         - name: METRICS_DOMAIN
           value: knative.dev/function
         - name: GVR
-          value: "filters.v1alpha1.function.knative.dev"
+          value: "filters.v1alpha1.function.knative.dev,waits.v1alpha1.function.knative.dev"
         ports:
           - containerPort: 9090
             name: metrics
