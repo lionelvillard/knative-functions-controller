@@ -13,6 +13,16 @@ rules:
   - watch
   - update
 - apiGroups:
+  - serving.knative.dev
+  resources:
+  - routes
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - create
+- apiGroups:
   - apps
   resources:
   - deployments
