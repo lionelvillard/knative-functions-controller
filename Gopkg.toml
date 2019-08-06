@@ -24,11 +24,14 @@ name = "k8s.io/code-generator"
 unused-packages = false
 non-go = false
 
+# Our master branch tracks github.com/knative/serving master.
+[[override]]
+  name = "knative.dev/serving"
+  branch = "master"
 
-# Our master branch tracks knative/pkg master.
 [[override]]
   name = "knative.dev/pkg"
-  branch = "master"
+  branch = "release-0.8"
 
 # needed because pkg upgraded
 [[override]]

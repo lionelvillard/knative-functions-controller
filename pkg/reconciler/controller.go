@@ -26,7 +26,9 @@ import (
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/injection/clients/dynamicclient"
 	"knative.dev/pkg/injection/clients/kubeclient"
-	svcinformer "knative.dev/pkg/injection/informers/kubeinformers/corev1/service"
+	servingclient "knative.dev/serving/pkg/client/injection/client"
+	routeinformer "knative.dev/serving/pkg/client/injection/informers/serving/v1beta1/route"
+
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/tracker"
 
@@ -41,16 +43,17 @@ const (
 func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
 	logger := logging.FromContext(ctx)
 
-	svcInformer := svcinformer.Get(ctx)
 	dynamicInformer := dynamic.Get(ctx)
+	routeInformer := routeinformer.Get(ctx)
 
 	c := &Reconciler{
 		kubeClient:    kubeclient.Get(ctx),
 		dynamicClient: dynamicclient.Get(ctx).Resource(dynamic.FilterGVR),
-		ServiceLister: svcInformer.Lister(),
+		servingClient: servingclient.Get(ctx),
+		routeLister:   routeInformer.Lister(),
 		Recorder: record.NewBroadcaster().NewRecorder(
 			scheme.Scheme, corev1.EventSource{Component: controllerAgentName}),
-		functionName: "filter-dispatcher",
+		functionName: "filter",
 	}
 	impl := controller.NewImpl(c, logger, "Functions")
 
@@ -60,14 +63,14 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 
 	c.Tracker = tracker.New(impl.EnqueueKey, controller.GetTrackerLease(ctx))
 
-	svcInformer.Informer().AddEventHandler(controller.HandleAll(
-		// Call the tracker's OnChanged method, but we've seen the objects
-		// coming through this path missing TypeMeta, so ensure it is properly
-		// populated.
-		controller.EnsureTypeMeta(
-			c.Tracker.OnChanged,
-			corev1.SchemeGroupVersion.WithKind("Service"),
-		),
-	))
+	// svcInformer.Informer().AddEventHandler(controller.HandleAll(
+	// 	// Call the tracker's OnChanged method, but we've seen the objects
+	// 	// coming through this path missing TypeMeta, so ensure it is properly
+	// 	// populated.
+	// 	controller.EnsureTypeMeta(
+	// 		c.Tracker.OnChanged,
+	// 		corev1.SchemeGroupVersion.WithKind("Service"),
+	// 	),
+	// ))
 	return impl
 }
