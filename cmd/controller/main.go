@@ -16,13 +16,43 @@ limitations under the License.
 package main
 
 import (
-	// The set of controllers this controller process runs.
-	"github.com/lionelvillard/knative-functions-controller/pkg/reconciler"
-
-	// This defines the shared main for injected controllers.
+	"github.com/kelseyhightower/envconfig"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"knative.dev/pkg/injection"
 	"knative.dev/pkg/injection/sharedmain"
+
+	"github.com/lionelvillard/knative-functions-controller/pkg/dynamic"
+	"github.com/lionelvillard/knative-functions-controller/pkg/reconciler/functions"
 )
 
+type envConfig struct {
+	Namespace string   `envconfig:"SYSTEM_NAMESPACE" default:"default"`
+	GVR       []string `envconfig:"GVR" required:"true"`
+}
+
 func main() {
-	sharedmain.Main("controller", reconciler.NewController)
+	logCfg := zap.NewProductionConfig()
+	logCfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	dlogger, err := logCfg.Build()
+	logger := dlogger.Sugar()
+
+	var env envConfig
+	err = envconfig.Process("", &env)
+	if err != nil {
+		logger.Fatalw("Error processing environment", zap.Error(err))
+	}
+
+	controllers := make([]injection.ControllerConstructor, len(env.GVR))
+	for i, raw := range env.GVR {
+		gvr, _ := schema.ParseResourceArg(raw)
+		logger.Infof("injecting %v", *gvr)
+
+		injection.Default.RegisterInformer(dynamic.WithInformer(*gvr))
+
+		controllers[i] = functions.NewController(*gvr)
+	}
+
+	sharedmain.Main("controller", controllers...)
 }

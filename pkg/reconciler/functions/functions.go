@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package reconciler
+package functions
 
 import (
 	"context"
@@ -43,7 +43,7 @@ import (
 	servingv1beta1listers "knative.dev/serving/pkg/client/listers/serving/v1beta1"
 
 	duckv1alpha1 "github.com/lionelvillard/knative-functions-controller/pkg/apis/duck/v1alpha1"
-	"github.com/lionelvillard/knative-functions-controller/pkg/reconciler/resources"
+	"github.com/lionelvillard/knative-functions-controller/pkg/reconciler/functions/resources"
 )
 
 // Reconciler implements controller.Reconciler for dynamic resources.

@@ -21,33 +21,29 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/informers"
 	"knative.dev/pkg/controller"
-	"knative.dev/pkg/injection"
 	"knative.dev/pkg/logging"
 
 	"github.com/lionelvillard/knative-functions-controller/pkg/dynamic/factory"
 )
 
-var (
-	FilterGVR = schema.GroupVersionResource{Group: "function.knative.dev", Version: "v1alpha1", Resource: "filters"}
-)
-
-func init() {
-	injection.Default.RegisterInformer(withInformer)
-}
-
 // Key is used as the key for associating information
 // with a context.Context.
-type Key struct{}
+type Key struct {
+	gvr schema.GroupVersionResource
+}
 
-func withInformer(ctx context.Context) (context.Context, controller.Informer) {
-	f := factory.Get(ctx)
-	inf := f.ForResource(FilterGVR)
-	return context.WithValue(ctx, Key{}, inf), inf.Informer()
+func WithInformer(gvr schema.GroupVersionResource) func(ctx context.Context) (context.Context, controller.Informer) {
+	return func(ctx context.Context) (context.Context, controller.Informer) {
+
+		f := factory.Get(ctx)
+		inf := f.ForResource(gvr)
+		return context.WithValue(ctx, Key{gvr: gvr}, inf), inf.Informer()
+	}
 }
 
 // Get extracts the Dynamic informer from the context.
-func Get(ctx context.Context) informers.GenericInformer {
-	untyped := ctx.Value(Key{})
+func Get(ctx context.Context, gvr schema.GroupVersionResource) informers.GenericInformer {
+	untyped := ctx.Value(Key{gvr: gvr})
 	if untyped == nil {
 		logging.FromContext(ctx).Panicf(
 			"Unable to fetch %T from context.", (informers.GenericInformer)(nil))
