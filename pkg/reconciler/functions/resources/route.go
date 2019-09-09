@@ -40,8 +40,8 @@ type RouteOption func(*servingv1beta1.Route) error
 // 	return fmt.Sprintf("%s-%s.%s.svc.%s", service, language, namespace, utils.GetClusterDomainName())
 // }
 
-func MakeRouteName(functionName, name string) string {
-	return fmt.Sprintf("%s-%s", functionName, name)
+func MakeRouteName(functionName, name, ns string) string {
+	return fmt.Sprintf("%s-%s-%s", functionName, ns, name)
 }
 
 func MakeRoute(functionName string, fn *duckv1alpha1.Function, opts ...RouteOption) (*servingv1beta1.Route, error) {
@@ -54,8 +54,8 @@ func MakeRoute(functionName string, fn *duckv1alpha1.Function, opts ...RouteOpti
 			Kind:       "Route",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      MakeRouteName(functionName, fn.Name),
-			Namespace: fn.Namespace,
+			Name:      MakeRouteName(functionName, fn.Name, fn.Namespace),
+			Namespace: "knative-functions",
 			Labels: map[string]string{
 				FunctionRoleLabel: FunctionRole,
 			},

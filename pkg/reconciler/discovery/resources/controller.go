@@ -17,27 +17,27 @@ limitations under the License.
 package resources
 
 import (
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	servingv1beta1 "knative.dev/serving/pkg/apis/serving/v1beta1"
 )
 
-// MakeConfigMap creates a new configmap for a Function dispatcher.
-func MakeConfigMap(namespace, name string) (*corev1.ConfigMap, error) {
-	// Add annotations
-	cm := &corev1.ConfigMap{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "ConfigMap",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			// OwnerReferences: []metav1.OwnerReference{
-			// 	*kmeta.NewControllerRef(fn),
-			// },
-		},
-		Data: map[string]string{},
-	}
+// MakeFunctionController creates a new Function controller
+func MakeFunctionController(namespace, name string) (*servingv1beta1.Service, error) {
+	// // Add annotations
+	// service := &servingv1beta1.Service{
+	// 	TypeMeta: metav1.TypeMeta{
+	// 		APIVersion: "v1",
+	// 		Kind:       "ConfigMap",
+	// 	},
+	// 	ObjectMeta: metav1.ObjectMeta{
+	// 		Name:      name,
+	// 		Namespace: namespace,
+	// 		// OwnerReferences: []metav1.OwnerReference{
+	// 		// 	*kmeta.NewControllerRef(fn),
+	// 		// },
+	// 	},
+	// 	Data: map[string]string{},
+	// }
 
-	return cm, nil
+	// return cm, nil
+	return nil, nil
 }

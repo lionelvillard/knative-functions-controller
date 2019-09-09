@@ -161,7 +161,7 @@ func (r *Reconciler) reconcileRoute(ctx context.Context, fn *duckv1alpha1.Functi
 	logger := logging.FromContext(ctx)
 	//	lang := fn.Spec["language"].(string)
 	// Get the  Route and propagate the status to the Function in case it does not exist.
-	route, err := r.routeLister.Routes(fn.Namespace).Get(resources.MakeRouteName(r.functionName, fn.Name))
+	route, err := r.routeLister.Routes("knative-functions").Get(resources.MakeRouteName(r.functionName, fn.Name, fn.Namespace))
 	if err != nil {
 		if apierrs.IsNotFound(err) {
 			route, err = resources.MakeRoute(r.functionName, fn)
@@ -169,7 +169,7 @@ func (r *Reconciler) reconcileRoute(ctx context.Context, fn *duckv1alpha1.Functi
 				logger.Error("Failed to create the function route object", zap.Error(err))
 				return nil, err
 			}
-			route, err = r.servingClient.ServingV1beta1().Routes(fn.Namespace).Create(route)
+			route, err = r.servingClient.ServingV1beta1().Routes("knative-functions").Create(route)
 			if err != nil {
 				logger.Error("Failed to create the function route", zap.Error(err))
 				return nil, err
