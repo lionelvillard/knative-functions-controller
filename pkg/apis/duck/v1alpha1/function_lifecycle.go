@@ -38,6 +38,10 @@ const (
 	// FunctionConditionAddressable has status true when this Function meets
 	// the Addressable contract and has a non-empty URL.
 	FunctionConditionAddressable apis.ConditionType = "Addressable"
+
+	// FunctionConditionRouteReady has status true when the route
+	// associated to the function is ready
+	FunctionConditionRouteReady apis.ConditionType = "RouteReady"
 )
 
 var pFunctionCondSet = apis.NewLivingConditionSet(FunctionConditionReady, FunctionConditionConfigMapSynced, FunctionConditionAddressable)
@@ -63,6 +67,14 @@ func (ps *FunctionStatus) MarkConfigMapSyncedReady() {
 
 func (ps *FunctionStatus) MarkConfigMapSyncedNotReady(reason, messageFormat string, messageA ...interface{}) {
 	pFunctionCondSet.Manage(ps).MarkFalse(FunctionConditionConfigMapSynced, reason, messageFormat, messageA...)
+}
+
+func (ps *FunctionStatus) MarkRouteReady() {
+	pFunctionCondSet.Manage(ps).MarkTrue(FunctionConditionRouteReady)
+}
+
+func (ps *FunctionStatus) MarkRouteNotReady(reason, messageFormat string, messageA ...interface{}) {
+	pFunctionCondSet.Manage(ps).MarkFalse(FunctionConditionRouteReady, reason, messageFormat, messageA...)
 }
 
 func (ps *FunctionStatus) MarkAddressableNotReady(reason, messageFormat string, messageA ...interface{}) {

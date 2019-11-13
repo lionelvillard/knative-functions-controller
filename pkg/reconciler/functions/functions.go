@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/knative/eventing/pkg/utils"
 	"go.uber.org/zap"
@@ -99,11 +100,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, key string) error {
 	original := &duckv1alpha1.Function{}
 	duck.FromUnstructured(untyped, original)
 
-	if _, ok := original.Spec["language"]; !ok {
-		logger.Error("missing language property")
-		return nil
-	}
-
 	resource := original.DeepCopy()
 
 	// Reconcile this copy of the resource and then write back any status
@@ -133,10 +129,15 @@ func (r *Reconciler) reconcile(ctx context.Context, fn *duckv1alpha1.Function) e
 		// When a controller needs finalizer handling, it would go here.
 		return nil
 	}
-
 	fn.Status.InitializeConditions()
 
 	route, err := r.reconcileRoute(ctx, fn)
+	if err != nil {
+		fn.Status.MarkRouteNotReady("ReconcileFailed", "%v", err)
+		return err
+	}
+
+	err = r.propagateRouteStatus(ctx, fn, route)
 	if err != nil {
 		return err
 	}
@@ -153,13 +154,14 @@ func (r *Reconciler) reconcile(ctx context.Context, fn *duckv1alpha1.Function) e
 		Host:   fmt.Sprintf("%s.%s.svc.%s", route.Name, route.Namespace, utils.GetClusterDomainName()),
 	})
 
+	fn.Status.URL = route.Status.URL
 	fn.Status.ObservedGeneration = fn.Generation
 	return nil
 }
 
 func (r *Reconciler) reconcileRoute(ctx context.Context, fn *duckv1alpha1.Function) (*servingv1beta1.Route, error) {
 	logger := logging.FromContext(ctx)
-	//	lang := fn.Spec["language"].(string)
+
 	// Get the  Route and propagate the status to the Function in case it does not exist.
 	route, err := r.routeLister.Routes("knative-functions").Get(resources.MakeRouteName(r.functionName, fn.Name, fn.Namespace))
 	if err != nil {
@@ -180,17 +182,32 @@ func (r *Reconciler) reconcileRoute(ctx context.Context, fn *duckv1alpha1.Functi
 		logger.Error("Unable to get the function route", zap.Error(err))
 		return nil, err
 	}
+
 	// Check to make sure that the Function owns this service and if not, complain.
 	if !metav1.IsControlledBy(route, fn) {
 		return nil, fmt.Errorf("Function: %s/%s does not own Route: %q", fn.Namespace, fn.Name, route.Name)
 	}
+
 	return route, nil
+}
+
+func (r *Reconciler) propagateRouteStatus(ctx context.Context, fn *duckv1alpha1.Function, route *servingv1beta1.Route) error {
+	c := route.Status.GetCondition(servingv1beta1.RouteConditionReady)
+	if c == nil || c.Status != corev1.ConditionTrue {
+		if c == nil {
+			fn.Status.MarkRouteNotReady("Unknown", "")
+		} else {
+			fn.Status.MarkRouteNotReady(c.Reason, c.Message)
+		}
+		return fmt.Errorf("route is not ready")
+	}
+	fn.Status.MarkRouteReady()
+	return nil
 }
 
 func (r *Reconciler) reconcileConfig(ctx context.Context, fn *duckv1alpha1.Function, route *servingv1beta1.Route) (*corev1.ConfigMap, error) {
 	logger := logging.FromContext(ctx)
-	lang := fn.Spec["language"].(string)
-	cmname := fmt.Sprintf("%s-%s", r.functionName, lang)
+	cmname := fmt.Sprintf("config-function-%s", r.functionName)
 
 	cm, err := r.kubeClient.CoreV1().ConfigMaps(system.Namespace()).Get(cmname, metav1.GetOptions{})
 	if err != nil {
@@ -214,37 +231,54 @@ func (r *Reconciler) reconcileConfig(ctx context.Context, fn *duckv1alpha1.Funct
 		cm.Data = make(map[string]string)
 	}
 
-	if _, ok := cm.Data["config.json"]; !ok {
-		cm.Data["config.json"] = "{}"
+	if _, ok := cm.Data["___config.json"]; !ok {
+		cm.Data["___config.json"] = "{}"
 	}
 
 	// Deserialize config
-	var config map[string]string
-	err = json.Unmarshal([]byte(cm.Data["config.json"]), &config)
+	var config map[string]interface{}
+	err = json.Unmarshal([]byte(cm.Data["___config.json"]), &config)
 	if err != nil {
 		logger.Error("Unable to deserialize existing configuration", zap.Error(err))
 		return nil, err
 	}
 
 	// Update configuration
-	raw, err := json.Marshal(fn.Spec)
-	if err != nil {
-		logger.Error("Unable to serialize function instance spec", zap.Error(err))
-		return nil, err
+	// raw, err := json.Marshal(fn.Spec)
+	// if err != nil {
+	// 	logger.Error("Unable to serialize function instance spec", zap.Error(err))
+	// 	return nil, err
+	// }
+	// data := string(raw)
+	data := fn.Spec
+	update := false
+
+	key1 := route.Status.Address.URL
+	if key1 != nil {
+		url1 := strings.TrimLeft(key1.String(), key1.Scheme+"://")
+		if old, ok := config[url1]; !ok || !equality.Semantic.DeepEqual(old, data) {
+			config[url1] = data
+			update = true
+		}
 	}
-	data := string(raw)
-	key := fmt.Sprintf("%s.%s.svc.%s", route.Name, route.Namespace, utils.GetClusterDomainName())
 
-	if old, ok := config[key]; !ok || data != old {
-		config[key] = string(data)
+	key2 := route.Status.URL
+	if key2 != nil {
+		url2 := strings.TrimLeft(key2.String(), key2.Scheme+"://")
+		if old, ok := config[url2]; !ok || !equality.Semantic.DeepEqual(old, data) {
+			config[url2] = data
+			update = true
+		}
+	}
 
+	if update {
 		rawconfig, err := json.Marshal(config)
 		if err != nil {
 			logger.Error("Unable to serialize new configuration", zap.Error(err))
 			return nil, err
 		}
 
-		cm.Data["config.json"] = string(rawconfig)
+		cm.Data["___config.json"] = string(rawconfig)
 		return r.kubeClient.CoreV1().ConfigMaps(system.Namespace()).Update(cm)
 	}
 

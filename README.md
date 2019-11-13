@@ -9,20 +9,23 @@ A Knative Eventing Function consists of:
 This controller is responsible for creating the resources needed
 to make each function instance _Adressable_ through a shared runtime.
 
-
 ## Getting started
 
-### Prerequites
+### Prerequisites
 
 - A Kubernetes cluster
-- [Ko](https://github.com/google/ko)
 
 ### Installation
 
-Clone this repository and do:
+Run:
 
 ```sh
-ko apply -f config/
+kubectl apply -f https://github.com/lionelvillard/knative-functions-controller/releases/download/v0.1.0/function.yaml
+```
+
+Check the controller is ready:
+
+```sh
 kubectl get -n knative-functions deployments.apps
 NAME                                        READY   UP-TO-DATE   AVAILABLE   AGE
 functions-controller                        1/1     1            1           3d17h

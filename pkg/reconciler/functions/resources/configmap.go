@@ -21,7 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// MakeConfigMap creates a new configmap for a Function dispatcher.
+// MakeConfigMap creates a new configmap for a Function.
 func MakeConfigMap(namespace, name string) (*corev1.ConfigMap, error) {
 	// Add annotations
 	cm := &corev1.ConfigMap{

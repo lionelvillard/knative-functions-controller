@@ -29,16 +29,12 @@ import (
 const (
 	portName          = "endpoint"
 	portNumber        = 80
-	FunctionRoleLabel = "function.knative.dev/role"
+	FunctionRoleLabel = "functions.knative.dev/role"
 	FunctionRole      = "dispatcher"
 )
 
 // RouteOption can be used to optionally modify the Route in MakeRoute.
 type RouteOption func(*servingv1beta1.Route) error
-
-// func MakeExternalServiceAddress(namespace, service, language string) string {
-// 	return fmt.Sprintf("%s-%s.%s.svc.%s", service, language, namespace, utils.GetClusterDomainName())
-// }
 
 func MakeRouteName(functionName, name, ns string) string {
 	return fmt.Sprintf("%s-%s-%s", functionName, ns, name)
@@ -47,7 +43,6 @@ func MakeRouteName(functionName, name, ns string) string {
 func MakeRoute(functionName string, fn *duckv1alpha1.Function, opts ...RouteOption) (*servingv1beta1.Route, error) {
 	// Add annotations
 	tr := true
-	lang := fn.Spec["language"].(string)
 	route := &servingv1beta1.Route{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1beta1",
@@ -66,7 +61,7 @@ func MakeRoute(functionName string, fn *duckv1alpha1.Function, opts ...RouteOpti
 		Spec: servingv1beta1.RouteSpec{
 			Traffic: []servingv1beta1.TrafficTarget{
 				{
-					ConfigurationName: fmt.Sprintf("%s-dispatcher-%s", functionName, lang),
+					ConfigurationName: functionName,
 					LatestRevision:    &tr,
 					Percent:           100,
 				},

@@ -32,8 +32,8 @@ import (
 type Function struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              map[string]interface{} `json:"spec"`
-	Status            FunctionStatus         `json:"status"`
+	Spec              *runtime.RawExtension `json:"spec"`
+	Status            FunctionStatus        `json:"status"`
 }
 
 type FunctionStatus struct {
@@ -42,6 +42,11 @@ type FunctionStatus struct {
 	// Address holds the information needed to connect this Addressable up to receive events.
 	// +optional
 	Address *duckv1beta1.Addressable `json:"address,omitempty"`
+
+	// URL holds the url that will distribute traffic over the provided traffic targets.
+	// It generally has the form http[s]://{route-name}.{route-namespace}.{cluster-level-suffix}
+	// +optional
+	URL *apis.URL `json:"url,omitempty"`
 }
 
 // Ensure Resource satisfies apis.Listable
