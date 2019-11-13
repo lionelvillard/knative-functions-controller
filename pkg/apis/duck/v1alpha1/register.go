@@ -21,7 +21,7 @@ import (
 )
 
 // The functions group
-var GroupName = "function.knative.dev"
+var GroupName = "functions.knative.dev"
 
 // SchemeGroupVersion is group version used to register these objects
 var SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: "v1alpha1"}

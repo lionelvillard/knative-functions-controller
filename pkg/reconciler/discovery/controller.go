@@ -33,8 +33,8 @@ import (
 )
 
 const (
-	controllerAgentName          = "function-discovery-controller"
-	dispatcherFunctionAnnotation = "function.knative.dev/dispatcher"
+	controllerAgentName = "functions-discovery-controller"
+	functionAnnotation  = "functions.knative.dev/function"
 )
 
 // NewController returns a new Function reconcile controller.
@@ -64,7 +64,7 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 			}
 
 			annotations := typed.GetAnnotations()
-			if v, ok := annotations[dispatcherFunctionAnnotation]; ok && v == "true" {
+			if v, ok := annotations[functionAnnotation]; ok && v == "true" {
 				impl.Enqueue(untyped)
 			}
 		}))

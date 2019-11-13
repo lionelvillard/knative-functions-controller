@@ -4,7 +4,7 @@ metadata:
   name: functions-controller
 rules:
 - apiGroups:
-  - function.knative.dev
+  - functions.knative.dev
   resources:
   - "*"
   verbs:
@@ -45,3 +45,5 @@ rules:
   - create
   - get
   - update
+  - list
+  - watch
