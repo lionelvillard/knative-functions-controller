@@ -19,12 +19,14 @@ package functions
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/knative/eventing/pkg/utils"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/client/listers/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -58,8 +60,14 @@ type Reconciler struct {
 	// servingClient allows us to talk to the serving APIs
 	servingClient servingclient.Interface
 
-	// RouteLister index properties about Knative routes
+	// routeLister index properties about Knative routes
 	routeLister servingv1beta1listers.RouteLister
+
+	// serviceLister index properties about Knative services
+	serviceLister servingv1beta1listers.ServiceLister
+
+	// crdLister index properties about CRDs
+	crdLister apiextensionsv1beta1.CustomResourceDefinitionLister
 
 	// The tracker builds an index of what resources are watching other
 	// resources so that we can immediately react to changes to changes in
@@ -123,13 +131,27 @@ func (r *Reconciler) Reconcile(ctx context.Context, key string) error {
 }
 
 func (r *Reconciler) reconcile(ctx context.Context, fn *duckv1alpha1.Function) error {
-	//logger := logging.FromContext(ctx)
 	if fn.GetDeletionTimestamp() != nil {
 		// Check for a DeletionTimestamp.  If present, elide the normal reconcile logic.
 		// When a controller needs finalizer handling, it would go here.
 		return nil
 	}
 	fn.Status.InitializeConditions()
+
+	// Make sure the function service/configmaps exists
+	cm, err := r.reconcileConfig(ctx, fn, nil)
+	if err != nil {
+		fn.Status.MarkConfigMapNotSynced("CheckExistFailed", err.Error())
+		return err
+	}
+
+	_, err = r.reconcileService(ctx, fn, cm)
+	if err != nil {
+		fn.Status.MarkServiceNotSynced("CheckExistFailed", err.Error())
+		return err
+	}
+
+	// Add new route
 
 	route, err := r.reconcileRoute(ctx, fn)
 	if err != nil {
@@ -142,12 +164,18 @@ func (r *Reconciler) reconcile(ctx context.Context, fn *duckv1alpha1.Function) e
 		return err
 	}
 
-	_, err = r.reconcileConfig(ctx, fn, route)
+	cm, err = r.reconcileConfig(ctx, fn, route)
 	if err != nil {
-		fn.Status.MarkConfigMapSyncedNotReady("UpdateFailed", "")
+		fn.Status.MarkConfigMapNotSynced("UpdateFailed", err.Error())
 		return err
 	}
-	fn.Status.MarkConfigMapSyncedReady()
+	fn.Status.MarkConfigMapSynced()
+
+	_, err = r.reconcileService(ctx, fn, cm)
+	if err != nil {
+		fn.Status.MarkServiceNotSynced("UpdateFailed", err.Error())
+		return err
+	}
 
 	fn.Status.SetAddress(&apis.URL{
 		Scheme: "http",
@@ -227,62 +255,105 @@ func (r *Reconciler) reconcileConfig(ctx context.Context, fn *duckv1alpha1.Funct
 			return nil, err
 		}
 	}
+
+	update := false
+
 	if cm.Data == nil {
 		cm.Data = make(map[string]string)
+		update = true
 	}
 
 	if _, ok := cm.Data["___config.json"]; !ok {
 		cm.Data["___config.json"] = "{}"
+		update = true
 	}
 
-	// Deserialize config
-	var config map[string]interface{}
-	err = json.Unmarshal([]byte(cm.Data["___config.json"]), &config)
-	if err != nil {
-		logger.Error("Unable to deserialize existing configuration", zap.Error(err))
-		return nil, err
-	}
-
-	// Update configuration
-	// raw, err := json.Marshal(fn.Spec)
-	// if err != nil {
-	// 	logger.Error("Unable to serialize function instance spec", zap.Error(err))
-	// 	return nil, err
-	// }
-	// data := string(raw)
-	data := fn.Spec
-	update := false
-
-	key1 := route.Status.Address.URL
-	if key1 != nil {
-		url1 := strings.TrimLeft(key1.String(), key1.Scheme+"://")
-		if old, ok := config[url1]; !ok || !equality.Semantic.DeepEqual(old, data) {
-			config[url1] = data
-			update = true
+	if route != nil {
+		// Deserialize config
+		var config map[string]interface{}
+		err = json.Unmarshal([]byte(cm.Data["___config.json"]), &config)
+		if err != nil {
+			logger.Error("Unable to deserialize existing configuration", zap.Error(err))
+			return nil, err
 		}
-	}
 
-	key2 := route.Status.URL
-	if key2 != nil {
-		url2 := strings.TrimLeft(key2.String(), key2.Scheme+"://")
-		if old, ok := config[url2]; !ok || !equality.Semantic.DeepEqual(old, data) {
-			config[url2] = data
-			update = true
+		// Update configuration
+		data := fn.Spec
+
+		key := route.Status.Address.URL
+		if key != nil {
+			host := key.Host
+			parts := strings.Split(host, ".")
+			host = parts[0] + "." + parts[1]
+			if old, ok := config[host]; !ok || !equality.Semantic.DeepEqual(old, data) {
+				config[host] = data
+				update = true
+			}
+		}
+
+		if update {
+			rawconfig, err := json.Marshal(config)
+			if err != nil {
+				logger.Error("Unable to serialize new configuration", zap.Error(err))
+				return nil, err
+			}
+
+			cm.Data["___config.json"] = string(rawconfig)
 		}
 	}
 
 	if update {
-		rawconfig, err := json.Marshal(config)
-		if err != nil {
-			logger.Error("Unable to serialize new configuration", zap.Error(err))
-			return nil, err
-		}
-
-		cm.Data["___config.json"] = string(rawconfig)
 		return r.kubeClient.CoreV1().ConfigMaps(system.Namespace()).Update(cm)
 	}
 
 	return cm, nil
+}
+
+func (r *Reconciler) reconcileService(ctx context.Context, fn *duckv1alpha1.Function, cm *corev1.ConfigMap) (*servingv1beta1.Service, error) {
+	logger := logging.FromContext(ctx)
+
+	crd, err := r.crdLister.Get(r.functionName + ".functions.knative.dev")
+	if err != nil {
+		logger.Error("Failed to get function Custom Resource Definition", zap.Error(err))
+		return nil, fmt.Errorf("Failed to get function Custom Resource Definition: %v", err)
+	}
+
+	image, ok := crd.Annotations["functions.knative.dev/image"]
+	if !ok {
+		logger.Error("Missing functions.knative.dev/image annotation on function CRD", zap.Any("functionName", r.functionName))
+		return nil, errors.New("Missing functions.knative.dev/image annotation on function CRD")
+	}
+
+	expected := resources.MakeKnativeService(r.functionName, string(cm.UID), image)
+
+	// Update service annotation with config map UUID.
+	service, err := r.serviceLister.Services("knative-functions").Get(r.functionName)
+	if err != nil {
+		if apierrs.IsNotFound(err) {
+			ksvc, err := r.servingClient.ServingV1beta1().Services("knative-functions").Create(expected)
+			if err != nil {
+				logger.Error("Failed to create the function service", zap.Error(err))
+				return nil, fmt.Errorf("Failed to create the function service: %v", err)
+			}
+			return ksvc, nil
+		}
+
+		logger.Error("Unable to get the function service", zap.Error(err))
+		return nil, err
+	}
+
+	if !equality.Semantic.DeepEqual(expected.Spec.Template.Annotations, service.Spec.Template.Annotations) {
+		service = service.DeepCopy()
+		service.Spec.Template.Annotations = expected.Spec.Template.Annotations
+
+		service, err = r.servingClient.ServingV1beta1().Services("knative-functions").Update(service)
+		if err != nil {
+			logger.Error("Failed to update the function service", zap.Error(err))
+			return nil, fmt.Errorf("Failed to update the function service: %v", err)
+		}
+	}
+
+	return service, nil
 }
 
 // Update the Status of the resource.  Caller is responsible for checking
