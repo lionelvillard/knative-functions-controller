@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2019 The Knative Authors
+# Copyright 2019 IBM Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,19 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+set -e
+
 ROOT=$(dirname $BASH_SOURCE[0])/..
-source $ROOT/hack/lib/library.sh
+source $ROOT/github.sh
 
-TAG=$1
-
-export KO_DOCKER_REPO=docker.io/knativefunctions
-docker login -p $DOCKER_PASS -u $DOCKER_USER docker.io
-
-cd $ROOT
-mkdir -p release
-ko resolve -f config -t $TAG > release/function.yaml
-
-github::create_release $GITHUB_TOKEN lionelvillard/knative-functions-controller $TAG
-github::upload_asset $GITHUB_TOKEN lionelvillard/knative-functions-controller $TAG release/function.yaml
-
-rm -rf release
+github::create_release $GITHUB_TOKEN lionelvillard/bash-library v0.1.0
+github::upload_asset $GITHUB_TOKEN lionelvillard/bash-library v0.1.0 $ROOT/test/dummy.yaml
