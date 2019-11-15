@@ -32,11 +32,10 @@ func MakeConfigMap(namespace, name string) (*corev1.ConfigMap, error) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
-			// OwnerReferences: []metav1.OwnerReference{
-			// 	*kmeta.NewControllerRef(fn),
-			// },
 		},
-		Data: map[string]string{},
+		Data: map[string]string{
+			"___config.json": "{}",
+		},
 	}
 
 	return cm, nil

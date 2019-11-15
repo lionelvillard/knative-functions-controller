@@ -24,14 +24,16 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
+	crdinformers "knative.dev/pkg/client/injection/apiextensions/informers/apiextensions/v1beta1/customresourcedefinition"
+	kubeclient "knative.dev/pkg/client/injection/kube/client"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/injection"
 	"knative.dev/pkg/injection/clients/dynamicclient"
-	"knative.dev/pkg/injection/clients/kubeclient"
 	"knative.dev/pkg/logging"
 	servingclient "knative.dev/serving/pkg/client/injection/client"
 	routeinformer "knative.dev/serving/pkg/client/injection/informers/serving/v1beta1/route"
+	serviceinformer "knative.dev/serving/pkg/client/injection/informers/serving/v1beta1/service"
 
 	"github.com/lionelvillard/knative-functions-controller/pkg/dynamic"
 )
@@ -47,12 +49,16 @@ func NewController(gvr schema.GroupVersionResource) injection.ControllerConstruc
 
 		routeInformer := routeinformer.Get(ctx)
 		dynamicInformer := dynamic.Get(ctx, gvr)
+		serviceInformer := serviceinformer.Get(ctx)
+		crdInformer := crdinformers.Get(ctx)
 
 		c := &Reconciler{
 			kubeClient:    kubeclient.Get(ctx),
 			dynamicClient: dynamicclient.Get(ctx).Resource(gvr),
 			servingClient: servingclient.Get(ctx),
 			routeLister:   routeInformer.Lister(),
+			serviceLister: serviceInformer.Lister(),
+			crdLister:     crdInformer.Lister(),
 			Recorder: record.NewBroadcaster().NewRecorder(
 				scheme.Scheme, corev1.EventSource{Component: controllerAgentName}),
 			functionName: gvr.Resource,

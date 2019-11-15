@@ -31,7 +31,7 @@ const (
 	// FunctionConditionReady has status True when all subconditions below have been set to True.
 	FunctionConditionReady = apis.ConditionReady
 
-	// FunctionConditionConfigMapSynced has status true when this Function
+	// FunctionConditionConfigMapSynced has status true when the function
 	// has been synced with the configmap
 	FunctionConditionConfigMapSynced apis.ConditionType = "ConfigMapSynced"
 
@@ -42,6 +42,10 @@ const (
 	// FunctionConditionRouteReady has status true when the route
 	// associated to the function is ready
 	FunctionConditionRouteReady apis.ConditionType = "RouteReady"
+
+	// FunctionConditionServiceSynced has status true when the function
+	// has been synced with the the associated service
+	FunctionConditionServiceSynced apis.ConditionType = "ServiceReady"
 )
 
 var pFunctionCondSet = apis.NewLivingConditionSet(FunctionConditionReady, FunctionConditionConfigMapSynced, FunctionConditionAddressable)
@@ -61,12 +65,20 @@ func (ps *FunctionStatus) InitializeConditions() {
 	pFunctionCondSet.Manage(ps).InitializeConditions()
 }
 
-func (ps *FunctionStatus) MarkConfigMapSyncedReady() {
+func (ps *FunctionStatus) MarkConfigMapSynced() {
 	pFunctionCondSet.Manage(ps).MarkTrue(FunctionConditionConfigMapSynced)
 }
 
-func (ps *FunctionStatus) MarkConfigMapSyncedNotReady(reason, messageFormat string, messageA ...interface{}) {
+func (ps *FunctionStatus) MarkConfigMapNotSynced(reason, messageFormat string, messageA ...interface{}) {
 	pFunctionCondSet.Manage(ps).MarkFalse(FunctionConditionConfigMapSynced, reason, messageFormat, messageA...)
+}
+
+func (ps *FunctionStatus) MarkServiceSynced() {
+	pFunctionCondSet.Manage(ps).MarkTrue(FunctionConditionServiceSynced)
+}
+
+func (ps *FunctionStatus) MarkServiceNotSynced(reason, messageFormat string, messageA ...interface{}) {
+	pFunctionCondSet.Manage(ps).MarkFalse(FunctionConditionServiceSynced, reason, messageFormat, messageA...)
 }
 
 func (ps *FunctionStatus) MarkRouteReady() {
