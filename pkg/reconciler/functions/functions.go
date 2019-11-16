@@ -325,7 +325,7 @@ func (r *Reconciler) reconcileService(ctx context.Context, fn *duckv1alpha1.Func
 		return nil, errors.New("Missing functions.knative.dev/image annotation on function CRD")
 	}
 
-	expected := resources.MakeKnativeService(r.functionName, string(cm.UID), image)
+	expected := resources.MakeKnativeService(r.functionName, cm.ResourceVersion, image)
 
 	// Update service annotation with config map UUID.
 	service, err := r.serviceLister.Services("knative-functions").Get(r.functionName)

@@ -24,11 +24,11 @@ import (
 )
 
 const (
-	ConfigMapAnnotation = "functions.knative.dev/cm-uuid"
+	ConfigMapAnnotation = "functions.knative.dev/cm-resourceVersion"
 )
 
 // MakeKnativeService create a knative service
-func MakeKnativeService(functionName string, cmuuid, image string) *servingv1beta1.Service {
+func MakeKnativeService(functionName string, version, image string) *servingv1beta1.Service {
 	return &servingv1beta1.Service{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1beta1",
@@ -45,7 +45,7 @@ func MakeKnativeService(functionName string, cmuuid, image string) *servingv1bet
 			ConfigurationSpec: servingv1beta1.ConfigurationSpec{
 				Template: servingv1beta1.RevisionTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
-						Annotations: map[string]string{ConfigMapAnnotation: cmuuid},
+						Annotations: map[string]string{ConfigMapAnnotation: version},
 					},
 					Spec: servingv1beta1.RevisionSpec{
 						PodSpec: corev1.PodSpec{
