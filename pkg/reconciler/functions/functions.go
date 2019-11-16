@@ -145,9 +145,14 @@ func (r *Reconciler) reconcile(ctx context.Context, fn *duckv1alpha1.Function) e
 		return err
 	}
 
-	_, err = r.reconcileService(ctx, fn, cm)
+	svc, err := r.reconcileService(ctx, fn, cm)
 	if err != nil {
 		fn.Status.MarkServiceNotSynced("CheckExistFailed", err.Error())
+		return err
+	}
+
+	err = r.propagateServiceStatusIfError(ctx, fn, svc)
+	if err != nil {
 		return err
 	}
 
@@ -355,6 +360,19 @@ func (r *Reconciler) reconcileService(ctx context.Context, fn *duckv1alpha1.Func
 	}
 
 	return service, nil
+}
+
+func (r *Reconciler) propagateServiceStatusIfError(ctx context.Context, fn *duckv1alpha1.Function, service *servingv1beta1.Service) error {
+	c := service.Status.GetCondition(servingv1beta1.ServiceConditionReady)
+	if c == nil || c.Status != corev1.ConditionTrue {
+		if c == nil {
+			fn.Status.MarkServiceNotSynced("Unknown", "")
+		} else {
+			fn.Status.MarkServiceNotSynced(c.Reason, c.Message)
+		}
+		return fmt.Errorf("service %s is not ready", service.Name)
+	}
+	return nil
 }
 
 // Update the Status of the resource.  Caller is responsible for checking
