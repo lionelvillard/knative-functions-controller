@@ -69,17 +69,6 @@ func NewController(gvr schema.GroupVersionResource) injection.ControllerConstruc
 
 		dynamicInformer.Informer().AddEventHandler(controller.HandleAll(impl.Enqueue))
 
-		// c.Tracker = tracker.New(impl.EnqueueKey, controller.GetTrackerLease(ctx))
-
-		// svcInformer.Informer().AddEventHandler(controller.HandleAll(
-		// 	// Call the tracker's OnChanged method, but we've seen the objects
-		// 	// coming through this path missing TypeMeta, so ensure it is properly
-		// 	// populated.
-		// 	controller.EnsureTypeMeta(
-		// 		c.Tracker.OnChanged,
-		// 		corev1.SchemeGroupVersion.WithKind("Service"),
-		// 	),
-		// ))
 		return impl
 	}
 }
