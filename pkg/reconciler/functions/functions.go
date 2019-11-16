@@ -176,6 +176,7 @@ func (r *Reconciler) reconcile(ctx context.Context, fn *duckv1alpha1.Function) e
 		fn.Status.MarkServiceNotSynced("UpdateFailed", err.Error())
 		return err
 	}
+	fn.Status.MarkServiceSynced()
 
 	fn.Status.SetAddress(&apis.URL{
 		Scheme: "http",
@@ -342,9 +343,9 @@ func (r *Reconciler) reconcileService(ctx context.Context, fn *duckv1alpha1.Func
 		return nil, err
 	}
 
-	if !equality.Semantic.DeepEqual(expected.Spec.Template.Annotations, service.Spec.Template.Annotations) {
+	if !equality.Semantic.DeepEqual(expected.Spec, service.Spec) {
 		service = service.DeepCopy()
-		service.Spec.Template.Annotations = expected.Spec.Template.Annotations
+		service.Spec = expected.Spec
 
 		service, err = r.servingClient.ServingV1beta1().Services("knative-functions").Update(service)
 		if err != nil {
