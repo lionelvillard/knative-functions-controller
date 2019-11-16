@@ -17,7 +17,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -102,13 +101,10 @@ func main() {
 func newHandler(names []string) cache.ResourceEventHandler {
 	return cache.FilteringResourceEventHandler{
 		FilterFunc: func(obj interface{}) bool {
-			fmt.Println("received")
 			if object, ok := obj.(metav1.Object); ok {
-				fmt.Printf("crd name %s\n", object.GetName())
 				if labels := object.GetLabels(); labels != nil {
 					if v, ok := labels["functions.knative.dev/crd"]; ok && v == "true" {
 						for _, name := range names {
-							fmt.Printf("name %s\n", name)
 							if name == object.GetName() {
 								return false
 							}
@@ -126,16 +122,14 @@ func newHandler(names []string) cache.ResourceEventHandler {
 type restartResourceHandler struct{}
 
 func (r restartResourceHandler) OnAdd(obj interface{}) {
-	fmt.Println("exit")
+	// TODO: close channel
 	os.Exit(0)
 }
 
 func (r restartResourceHandler) OnUpdate(oldObj, newObj interface{}) {
-	fmt.Println("exit")
 	os.Exit(0)
 }
 
 func (r restartResourceHandler) OnDelete(obj interface{}) {
-	fmt.Println("exit")
 	os.Exit(0)
 }
