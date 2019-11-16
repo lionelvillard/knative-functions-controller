@@ -18,7 +18,6 @@ ROOT=$(dirname $BASH_SOURCE[0])/..
 source $ROOT/hack/lib/library.sh
 
 TAG=$1
-
 export KO_DOCKER_REPO=docker.io/knativefunctions
 docker login -p $DOCKER_PASS -u $DOCKER_USER docker.io
 
