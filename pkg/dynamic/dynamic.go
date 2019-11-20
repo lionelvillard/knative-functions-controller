@@ -34,7 +34,6 @@ type Key struct {
 
 func WithInformer(gvr schema.GroupVersionResource) func(ctx context.Context) (context.Context, controller.Informer) {
 	return func(ctx context.Context) (context.Context, controller.Informer) {
-
 		f := factory.Get(ctx)
 		inf := f.ForResource(gvr)
 		return context.WithValue(ctx, Key{gvr: gvr}, inf), inf.Informer()

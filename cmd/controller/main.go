@@ -32,6 +32,7 @@ import (
 	"knative.dev/pkg/signals"
 
 	"github.com/lionelvillard/knative-functions-controller/pkg/dynamic"
+	"github.com/lionelvillard/knative-functions-controller/pkg/reconciler/crds"
 	"github.com/lionelvillard/knative-functions-controller/pkg/reconciler/functions"
 )
 
@@ -46,6 +47,8 @@ var (
 
 func main() {
 	flag.Parse()
+
+	// Load functions CRDs.
 
 	cfg, err := sharedmain.GetConfig(*masterURL, *kubeconfig)
 	if err != nil {
@@ -67,9 +70,11 @@ func main() {
 		log.Fatalf("Error processing environment: %v", err)
 	}
 
-	ctx := signals.NewContext()
+	// Create a controller per function CRD.
 
-	controllers := make([]injection.ControllerConstructor, len(defs.Items))
+	controllers := make([]injection.ControllerConstructor, len(defs.Items)+1)
+	controllers[0] = crds.NewController
+
 	names := make([]string, len(defs.Items))
 	for i, crd := range defs.Items {
 		gvr := schema.GroupVersionResource{
@@ -79,21 +84,19 @@ func main() {
 		}
 		names[i] = crd.Name
 
-		log.Printf("injecting %v", gvr)
-
 		injection.Default.RegisterInformer(dynamic.WithInformer(gvr))
-
-		controllers[i] = functions.NewController(gvr)
+		controllers[i+1] = functions.NewController(gvr)
 	}
+
+	// Watch for any CRD changes
+	ctx := signals.NewContext()
 
 	f := externalversions.NewSharedInformerFactory(clientset, time.Hour)
 	crdInformer := f.Apiextensions().V1beta1().CustomResourceDefinitions().Informer()
 	crdInformer.AddEventHandler(newHandler(names))
 	go crdInformer.Run(ctx.Done())
 
-	if len(controllers) > 0 {
-		sharedmain.MainWithConfig(ctx, "controller", cfg, controllers...)
-	}
+	sharedmain.MainWithConfig(ctx, "controller", cfg, controllers...)
 
 	<-ctx.Done()
 }
