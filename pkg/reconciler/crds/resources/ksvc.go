@@ -19,12 +19,9 @@ package resources
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	servingv1beta1 "knative.dev/serving/pkg/apis/serving/v1beta1"
-)
 
-const (
-	ConfigMapAnnotation = "functions.knative.dev/cm-resourceVersion"
+	duckv1alpha1 "github.com/lionelvillard/knative-functions-controller/pkg/apis/duck/v1alpha1"
 )
 
 // MakeKnativeService create a knative service
@@ -37,15 +34,12 @@ func MakeKnativeService(functionName string, version, image string) *servingv1be
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      functionName,
 			Namespace: "knative-functions",
-			Labels: map[string]string{
-				FunctionRoleLabel: FunctionRole,
-			},
 		},
 		Spec: servingv1beta1.ServiceSpec{
 			ConfigurationSpec: servingv1beta1.ConfigurationSpec{
 				Template: servingv1beta1.RevisionTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
-						Annotations: map[string]string{ConfigMapAnnotation: version},
+						Annotations: map[string]string{duckv1alpha1.ConfigMapAnnotation: version},
 					},
 					Spec: servingv1beta1.RevisionSpec{
 						PodSpec: corev1.PodSpec{

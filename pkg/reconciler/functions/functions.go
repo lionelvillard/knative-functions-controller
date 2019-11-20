@@ -19,7 +19,6 @@ package functions
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -138,14 +137,9 @@ func (r *Reconciler) reconcile(ctx context.Context, fn *duckv1alpha1.Function) e
 	}
 	fn.Status.InitializeConditions()
 
-	// Make sure the function service/configmaps exists
-	cm, err := r.reconcileConfig(ctx, fn, nil)
-	if err != nil {
-		fn.Status.MarkConfigMapNotSynced("CheckExistFailed", err.Error())
-		return err
-	}
+	// Make sure the function service  exists
 
-	svc, err := r.reconcileService(ctx, fn, cm)
+	svc, err := r.checkService(ctx, r.functionName)
 	if err != nil {
 		fn.Status.MarkServiceNotSynced("CheckExistFailed", err.Error())
 		return err
@@ -169,14 +163,14 @@ func (r *Reconciler) reconcile(ctx context.Context, fn *duckv1alpha1.Function) e
 		return err
 	}
 
-	cm, err = r.reconcileConfig(ctx, fn, route)
+	cm, err := r.reconcileConfig(ctx, fn, route)
 	if err != nil {
 		fn.Status.MarkConfigMapNotSynced("UpdateFailed", err.Error())
 		return err
 	}
 	fn.Status.MarkConfigMapSynced()
 
-	_, err = r.reconcileService(ctx, fn, cm)
+	_, err = r.reconcileService(ctx, svc, cm)
 	if err != nil {
 		fn.Status.MarkServiceNotSynced("UpdateFailed", err.Error())
 		return err
@@ -245,36 +239,23 @@ func (r *Reconciler) reconcileConfig(ctx context.Context, fn *duckv1alpha1.Funct
 
 	cm, err := r.kubeClient.CoreV1().ConfigMaps(system.Namespace()).Get(cmname, metav1.GetOptions{})
 	if err != nil {
-		if apierrs.IsNotFound(err) {
-			cm, err = resources.MakeConfigMap(system.Namespace(), cmname)
-			if err != nil {
-				logger.Error("Failed to create the function configmap", zap.Error(err))
-				return nil, err
-			}
-			cm, err = r.kubeClient.CoreV1().ConfigMaps(system.Namespace()).Create(cm)
-			if err != nil {
-				logger.Error("Failed to create the function configmap", zap.Error(err))
-				return nil, err
-			}
-		} else {
-			logger.Error("Unable to get the function configmap", zap.Error(err))
-			return nil, err
-		}
-	}
-
-	update := false
-
-	if cm.Data == nil {
-		cm.Data = make(map[string]string)
-		update = true
-	}
-
-	if _, ok := cm.Data["___config.json"]; !ok {
-		cm.Data["___config.json"] = "{}"
-		update = true
+		logger.Error("Unable to get the function configmap", zap.Error(err))
+		return nil, err
 	}
 
 	if route != nil {
+		update := false
+
+		if cm.Data == nil {
+			cm.Data = make(map[string]string)
+			update = true
+		}
+
+		if _, ok := cm.Data["___config.json"]; !ok {
+			cm.Data["___config.json"] = "{}"
+			update = true
+		}
+
 		// Deserialize config
 		var config map[string]interface{}
 		err = json.Unmarshal([]byte(cm.Data["___config.json"]), &config)
@@ -305,58 +286,22 @@ func (r *Reconciler) reconcileConfig(ctx context.Context, fn *duckv1alpha1.Funct
 			}
 
 			cm.Data["___config.json"] = string(rawconfig)
-		}
-	}
 
-	if update {
-		return r.kubeClient.CoreV1().ConfigMaps(system.Namespace()).Update(cm)
+			return r.kubeClient.CoreV1().ConfigMaps(system.Namespace()).Update(cm)
+		}
 	}
 
 	return cm, nil
 }
 
-func (r *Reconciler) reconcileService(ctx context.Context, fn *duckv1alpha1.Function, cm *corev1.ConfigMap) (*servingv1beta1.Service, error) {
+func (r *Reconciler) checkService(ctx context.Context, functionName string) (*servingv1beta1.Service, error) {
 	logger := logging.FromContext(ctx)
-
-	crd, err := r.crdLister.Get(r.functionName + ".functions.knative.dev")
-	if err != nil {
-		logger.Error("Failed to get function Custom Resource Definition", zap.Error(err))
-		return nil, fmt.Errorf("Failed to get function Custom Resource Definition: %v", err)
-	}
-
-	image, ok := crd.Annotations["functions.knative.dev/image"]
-	if !ok {
-		logger.Error("Missing functions.knative.dev/image annotation on function CRD", zap.Any("functionName", r.functionName))
-		return nil, errors.New("Missing functions.knative.dev/image annotation on function CRD")
-	}
-
-	expected := resources.MakeKnativeService(r.functionName, cm.ResourceVersion, image)
 
 	// Update service annotation with config map UUID.
 	service, err := r.serviceLister.Services("knative-functions").Get(r.functionName)
 	if err != nil {
-		if apierrs.IsNotFound(err) {
-			ksvc, err := r.servingClient.ServingV1beta1().Services("knative-functions").Create(expected)
-			if err != nil {
-				logger.Error("Failed to create the function service", zap.Error(err))
-				return nil, fmt.Errorf("Failed to create the function service: %v", err)
-			}
-			return ksvc, nil
-		}
-
 		logger.Error("Unable to get the function service", zap.Error(err))
 		return nil, err
-	}
-
-	if !equality.Semantic.DeepEqual(expected.Spec, service.Spec) {
-		service = service.DeepCopy()
-		service.Spec = expected.Spec
-
-		service, err = r.servingClient.ServingV1beta1().Services("knative-functions").Update(service)
-		if err != nil {
-			logger.Error("Failed to update the function service", zap.Error(err))
-			return nil, fmt.Errorf("Failed to update the function service: %v", err)
-		}
 	}
 
 	return service, nil
@@ -373,6 +318,19 @@ func (r *Reconciler) propagateServiceStatusIfError(ctx context.Context, fn *duck
 		return fmt.Errorf("service %s is not ready", service.Name)
 	}
 	return nil
+}
+
+func (r *Reconciler) reconcileService(ctx context.Context, service *servingv1beta1.Service, cm *corev1.ConfigMap) (*servingv1beta1.Service, error) {
+	version := service.Spec.Template.Annotations[duckv1alpha1.ConfigMapAnnotation]
+
+	if version != cm.ResourceVersion {
+		copy := service.DeepCopy()
+		copy.Spec.Template.Annotations[duckv1alpha1.ConfigMapAnnotation] = cm.ResourceVersion
+
+		return r.servingClient.Serving().Services(service.Namespace).Update(copy)
+	}
+
+	return service, nil
 }
 
 // Update the Status of the resource.  Caller is responsible for checking
