@@ -20,7 +20,7 @@ to make each function instance _Adressable_ through a shared runtime.
 Run:
 
 ```sh
-kubectl apply -f https://github.com/lionelvillard/knative-functions-controller/releases/download/v0.1.0/function.yaml
+kubectl apply -f https://github.com/lionelvillard/knative-functions-controller/releases/download/v0.1.2/function.yaml
 ```
 
 Check the controller is ready:
